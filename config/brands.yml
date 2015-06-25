@@ -1,0 +1,19 @@
+
+apple:
+  {
+    "name": "Apple",
+    "page_title": "Apples"
+  }
+
+banana:
+  {
+    "name": "Banana",
+    "page_title": "Bananas"
+  }
+
+kayumito:
+    {
+      "name": "Kayumito",
+      "page_title": "Kayumito"
+    }
+

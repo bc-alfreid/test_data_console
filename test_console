@@ -1,0 +1,200 @@
+require 'json'
+require 'net/https'
+require 'openssl'
+require 'hawk'
+require 'dotenv'
+require 'yaml'
+require 'json'
+
+# ----------------------------------------------------------------------------------
+class ApiClient
+
+  def initialize(store_hash, username, token)
+    @username = username
+    @token = token
+    @store_hash = store_hash
+    uri = URI.parse(@store_hash)
+    @http = Net::HTTP.new(uri.host, uri.port)
+    @http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+    @http.use_ssl = true
+  end
+
+  def get(endpoint)
+    request = Net::HTTP::Get.new(endpoint)
+    return send_request(request)
+  end
+
+  def post(endpoint, data)
+    request = Net::HTTP::Post.new(endpoint)
+    request.body = data.to_json
+
+    return send_request(request)
+  end
+
+  def put()
+
+  end
+
+  def delete(endpoint)
+    request = Net::HTTP::Delete.new(endpoint)
+    return send_request(request)
+  end
+
+  def send_request(request)
+
+    request.basic_auth(@username, @token)
+    request.content_type = 'application/json'
+    request['Accept'] = 'application/json'
+    response = @http.request(request)
+    return response
+  end
+
+end
+
+# ----------------------------------------------------------------------------------
+
+class ContextIndentifier
+
+  def initialize()
+    @active_context = nil
+    @brands_context = {'name'=>'brands',
+                        'endpoint'=>'/api/v2/brands'}
+    @products_context = {'name'=>'products',
+                        'endpoint'=>'/api/v2/products'}
+    @orders_context = {'name'=>'orders',
+                        'endpoint'=>'/api/v2/orders'}
+    # ..and so on
+  end
+
+  def set_active_context(context)
+    case context
+      when 'products'
+        @active_context = @products_context
+      when 'orders'
+        @active_context = @orders_context
+      when 'brands'
+        @active_context = @brands_context
+    end
+  end
+
+  def get_active_context()
+    return @active_context
+  end
+end
+
+
+puts "\e[H\e[2J"
+puts
+puts '--------------------------------------------------------------------'
+  logo = '
+                          ___
+                         |   \
+                         |    \
+                         |____|
+                         |    /
+                         |___/ I G commerce - Running API Automated Test
+      '
+puts logo
+puts '--------------------------------------------------------------------'
+
+
+
+# TODO this should be on a cfg file
+# TODO get and set should return to prompt if no active context
+
+store = 'https://store-o8gfsgf5.bcapp.dev'
+username = 'testing'
+token = '1347e4068b6aebd5f39137d5a81bc9e9c41ee37b'
+api_client = ApiClient.new(store, username, token)
+context_id = ContextIndentifier.new()
+
+
+prompt_string = 'start'
+while true
+
+  print prompt_string + '->  '
+
+  # get input from user
+  input_line = gets
+  line_words = input_line.split(' ')
+
+  if line_words.length > 0
+
+    if line_words[0].downcase == 'products'
+      context_id.set_active_context('products')
+      prompt_string = context_id.get_active_context['name']
+    end
+
+    if line_words[0].downcase == 'orders'
+      context_id.set_active_context('orders')
+      prompt_string = context_id.get_active_context['name']
+    end
+
+    if line_words[0].downcase == 'brands'
+      context_id.set_active_context('brands')
+      prompt_string = context_id.get_active_context['name']
+    end
+
+    if line_words[0].downcase == 'get'
+      if line_words.length == 1
+        endpoint = context_id.get_active_context['endpoint']
+        response = api_client.get(endpoint)
+        response = JSON.parse(response.body, symbolize_names: true)
+        response.each do |item|
+          string_out = "id: #{item[:id]}"
+          string_out = "#{string_out}\tname: #{item[:name]}" if item[:name]
+          string_out = "#{string_out}\tstatus: #{item[:status]}" if item[:status]
+          puts "\t#{string_out}"
+        end
+      else
+        item_id = line_words[1].to_s
+        endpoint = context_id.get_active_context['endpoint'] + "/#{item_id}"
+        response = api_client.get(endpoint)
+        response = JSON.parse(response.body, symbolize_names: true)
+        response.each do |key, value|
+          puts "\t#{key}:\t#{value}"
+        end
+      end
+    end
+
+    # TODO add manually or add from file
+    # TODO add all in file
+    # TODO post with verify
+    # TODO verify line word counts are exact
+    if line_words[0].downcase == 'add'
+      endpoint = context_id.get_active_context['endpoint']
+      data_file = YAML.load_file(__dir__ + "/config/#{line_words[1]}")    # get post data
+      data = data_file[line_words[2]]
+      response = api_client.post(endpoint, data)                          #post now
+      puts "\t#{response.body}"
+    end
+
+    if line_words[0].downcase == 'add_all'
+      endpoint = context_id.get_active_context['endpoint']
+      # get post data
+      data_file = YAML.load_file(__dir__ + "/config/#{line_words[1]}")
+      data_file.each do |key_data, val_data|
+        response = api_client.post(endpoint, val_data)
+        puts "\tAdding #{key_data}:\t#{response.body}"
+      end
+    end
+
+    # TODO delete all in file
+    if line_words[0].downcase == 'delete'
+      item_id = line_words[1].to_s
+      endpoint = context_id.get_active_context['endpoint'] + "/#{item_id}"
+      response = api_client.delete(endpoint)
+      puts "\t#{response.body}"
+    end
+
+    if line_words[0].downcase == 'update'
+
+    end
+
+    if line_words[0].downcase == 'exit'
+      break
+    end
+
+  end
+end
+
